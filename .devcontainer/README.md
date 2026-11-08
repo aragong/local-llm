@@ -10,23 +10,30 @@
 │   ├── stop-container.sh      # Script para detener
 │   ├── help.sh                # Script de ayuda
 │   └── README.md              # Este archivo
-├── Dockerfile                 # Archivo raíz (a nivel superior)
 └── ... otros archivos
 ```
 
-**⚠️ IMPORTANTE:** La carpeta es `.devcontainer` (con el punto). Los scripts la buscan automáticamente desde cualquier ubicación.
+**IMPORTANTE:**
+- La carpeta es `.devcontainer` (con el punto)
+- El **Dockerfile está dentro** de `.devcontainer/`
+- Los scripts se ejecutan desde `.devcontainer/` o desde la raíz del proyecto
 
 ## 🚀 Comandos principales
 
 ### 1️⃣ Arrancar el contenedor
 
 ```bash
-# Desde cualquier lugar (usa rutas relativas)
+# Desde la raíz del proyecto (recomendado)
 chmod +x .devcontainer/start-from-terminal.sh
 ./devcontainer/start-from-terminal.sh
 ```
 
-**Nota:** El script detecta automáticamente la ruta del Dockerfile subiendo un nivel desde `.devcontainer/`
+**O desde dentro de .devcontainer/:**
+```bash
+cd .devcontainer/
+chmod +x ./start-from-terminal.sh
+./start-from-terminal.sh
+```
 
 ### 2️⃣ Acceder a pi
 
@@ -46,6 +53,13 @@ pi
 ```bash
 chmod +x .devcontainer/stop-container.sh
 ./devcontainer/stop-container.sh
+```
+
+**O desde dentro de .devcontainer/:**
+```bash
+cd .devcontainer/
+chmod +x ./stop-container.sh
+./stop-container.sh
 ```
 
 ## 🐛 Solución de problemas

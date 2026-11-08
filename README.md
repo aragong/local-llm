@@ -156,9 +156,10 @@ chmod +x .devcontainer/stop-container.sh
 
 ---
 
-## 📝 Notas adicionales
+## 📝 Notas importantes
 
-- **Carpeta `.devcontainer`**: Es una carpeta oculta (empieza con punto). Los scripts la buscan automáticamente desde la raíz del proyecto.
+- **Carpeta `.devcontainer`**: Es una carpeta oculta (empieza con punto). Contiene `Dockerfile`, scripts de terminal, etc.
+- **Dockerfile**: Está **dentro** de `.devcontainer/`, no en la raíz del proyecto
 - **Persistencia**: Los modelos se guardan en un volumen Docker (`llm-models`) para no perderlos al reiniciar.
 - **Primera vez**: La construcción de llama.cpp puede tardar 10-20 minutos.
 - **Rebuild**: Después de modificar `.devcontainer/`, usa `docker build` o `F1 → Dev Containers: Rebuild Container` en VS Code.

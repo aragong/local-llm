@@ -3,16 +3,20 @@
 
 # Determinar ruta absoluta del script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$SCRIPT_DIR"
 
 CONTAINER_NAME="llm-setup-dev"
 VOLUME_NAME="llm-models"
 IMAGE_NAME="llm-setup-dev"
 
+# El Dockerfile está dentro de .devcontainer/
+DOCKERFILE_PATH="$PROJECT_ROOT/Dockerfile"
+
 echo "🐳 LLM-Setup DevContainer"
 echo "========================"
 echo "📍 Script location: $SCRIPT_DIR"
 echo "📍 Project root: $PROJECT_ROOT"
+echo "📍 Dockerfile: $DOCKERFILE_PATH"
 echo ""
 
 # Verificar si Docker está disponible
@@ -22,10 +26,8 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # Verificar Dockerfile existe
-DOCKERFILE_PATH="$PROJECT_ROOT/Dockerfile"
 if [ ! -f "$DOCKERFILE_PATH" ]; then
     echo "❌ Error: No se encontró Dockerfile en: $DOCKERFILE_PATH"
-    echo "   Asegúrate de estar en el directorio raíz del proyecto"
     exit 1
 fi
 
