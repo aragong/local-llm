@@ -112,6 +112,28 @@ sudo systemctl enable docker
 sudo usermod -aG docker $USER
 ```
 
+### ¿Qué pasa si dejo de usar el contenedor?
+
+**⚠️ Importante:** El contenedor **NO** se detiene solo. Debes detenerlo manualmente:
+
+```bash
+# Detener temporalmente
+./devcontainer/stop-container.sh
+
+# O desde terminal
+docker stop llm-setup-dev
+docker rm llm-setup-dev
+```
+
+**Los modelos se conservan** en el volumen `llm-models` (~13 GB) a menos que los elimines:
+
+```bash
+# Eliminar volumen (borra los modelos)
+docker volume rm llm-models
+```
+
+**Para más información:** `cat .devcontainer/HELP.md`
+
 ## 📊 Recursos en uso
 
 | Recurso | Uso típico |

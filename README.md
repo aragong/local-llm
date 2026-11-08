@@ -160,9 +160,57 @@ chmod +x .devcontainer/stop-container.sh
 
 - **Carpeta `.devcontainer`**: Es una carpeta oculta (empieza con punto). Contiene `Dockerfile`, scripts de terminal, etc.
 - **Dockerfile**: Está **dentro** de `.devcontainer/`, no en la raíz del proyecto
-- **Persistencia**: Los modelos se guardan en un volumen Docker (`llm-models`) para no perderlos al reiniciar.
+- **Persistencia**: Los modelos se guardan en un volumen Docker (`llm-models`) para no perderlos al reinizar
 - **Primera vez**: La construcción de llama.cpp puede tardar 10-20 minutos.
 - **Rebuild**: Después de modificar `.devcontainer/`, usa `docker build` o `F1 → Dev Containers: Rebuild Container` en VS Code.
+
+## ⏸️ Detener el contenedor
+
+**Importante:** El contenedor **NO** se detiene solo. Debes detenerlo manualmente:
+
+```bash
+# Detener temporalmente (los modelos se conservan)
+./devcontainer/stop-container.sh
+
+# O detener desde terminal
+docker stop llm-setup-dev
+docker rm llm-setup-dev
+```
+
+### ¿Qué pasa con los modelos?
+
+| Acción | ¿Se borran los modelos? |
+|--------|------------------------|
+| Detener contenedor | ❌ NO |
+| Eliminar contenedor | ❌ NO |
+| Eliminar volumen | ✅ SÍ (~13 GB) |
+
+**Los modelos (~13 GB) se conservan siempre que no elimines el volumen `llm-models`.**
+
+### Limpieza completa (opcional)
+
+```bash
+# Detener contenedor y eliminar volumen
+./devcontainer/cleanup.sh --all
+```
+
+**⚠️ Advertencia:** Esto borra **todos los modelos (~13 GB)**.
+
+## 📚 Guía completa
+
+Para instrucciones detalladas sobre usar, detener y limpiar, ver: `.devcontainer/HELP.md`
+
+## 📊 Recursos en uso
+
+| Recurso | Uso típico | Estado cuando está activo |
+|---------|------------|--------------------------|
+| RAM | ~2.0 GB | Continuo hasta detener |
+| VRAM | ~6-7 GB | Solo el modelo cargado |
+| Disco | ~13 GB | Guardado en volumen persistente |
+| CPU | ~10-15% | Solo durante inferencia |
+| Puerto | 9931 | Abierto mientras esté activo |
+
+**Tip:** Detén el contenedor cuando no lo uses para ahorrar recursos! 🚀
 
 | Recurso | Uso típico |
 |---------|------------|
