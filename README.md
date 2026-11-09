@@ -5,7 +5,7 @@ Contenedor con [llama.cpp](https://github.com/ggml-org/llama.cpp) (compilado con
 | Modelo | Fichero | Tamaño |
 |---|---|---|
 | Qwen3.5 9B Q4_K_M | `unsloth/Qwen3.5-9B-GGUF` / `Qwen3.5-9B-Q4_K_M.gguf` | ~5.7 GB |
-| DeepSeek R1 Distill Qwen 14B Q5_K_M | `unsloth/DeepSeek-R1-Distill-Qwen-14B-GGUF` / `DeepSeek-R1-Distill-Qwen-14B-Q5_K_M.gguf` | ~10.5 GB |
+| DeepSeek R1 Distill Qwen 14B Q4_K_M | `unsloth/DeepSeek-R1-Distill-Qwen-14B-GGUF` / `DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf` | ~9.0 GB |
 
 `llama-server` carga un solo modelo a la vez (`--models-max 1`): al pedir otro, descarga el anterior de la VRAM.
 
@@ -38,7 +38,7 @@ VS Code (`devcontainer.json`) y `local-llm.sh` usan el **mismo** contenedor, `lo
 ./local-llm.sh --cleanup   # elimina contenedor y, si confirmas, volumen e imagen
 ```
 
-Primera vez: compilar llama.cpp ~10-20 min + descargar ~16 GB. API en `http://localhost:9931` (solo localhost); otro puerto: `LOCAL_LLM_PORT=9932 ./local-llm.sh --start`.
+Primera vez: compilar llama.cpp ~10-20 min + descargar ~15 GB. API en `http://localhost:9931` (solo localhost); otro puerto: `LOCAL_LLM_PORT=9932 ./local-llm.sh --start`.
 
 El contenedor **no se para solo**: mientras corre ocupa VRAM. Párelo con `--stop` cuando no lo use.
 
@@ -54,7 +54,7 @@ Arranca con `qwen3.5-9b`. Cambiar de modelo: `/model` → `deepseek-r1-14b`.
 | Modelo | Para qué | Contexto |
 |---|---|---|
 | `qwen3.5-9b` | Uso general, agente con herramientas | 256k (KV q8_0) |
-| `deepseek-r1-14b` | Razonamiento matemático/físico (piensa siempre en `<think>`). Flojo usando herramientas de pi: mejor para preguntar que para editar código | 32k (KV q8_0) |
+| `deepseek-r1-14b` | Razonamiento matemático/físico (piensa siempre en `<think>`). Flojo usando herramientas de pi: mejor para preguntar que para editar código | 44k (KV q8_0) |
 
 | Acción | Cómo |
 |---|---|
