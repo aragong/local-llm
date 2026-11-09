@@ -1,236 +1,64 @@
 # llm-setup
 
-Devcontainer con [llama.cpp](https://github.com/ggml-org/llama.cpp) (compilado con CUDA para Blackwell / RTX 50xx) + [pi](https://pi.dev) y dos modelos locales:
+Contenedor con [llama.cpp](https://github.com/ggml-org/llama.cpp) (compilado con CUDA para Blackwell / RTX 50xx) + [pi](https://pi.dev) y un modelo local:
 
 | Modelo | Fichero | Tamaño |
 |---|---|---|
-| Gemma 4 12B it Q4_K_M | `unsloth/gemma-4-12b-it-GGUF` / `gemma-4-12b-it-Q4_K_M.gguf` | ~7.1 GB |
 | Qwen3.5 9B Q4_K_M | `unsloth/Qwen3.5-9B-GGUF` / `Qwen3.5-9B-Q4_K_M.gguf` | ~5.7 GB |
 
-Usuario del contenedor: `oceanos`.
-
----
-
-## Recursos utilizados
-
-- **[llama.cpp](https://github.com/ggml-org/llama.cpp)** - Implementación en C para ejecutar modelos LLM de forma eficiente
-- **[pi](https://pi.dev)** - Asistente de codificación y razonamiento con IA local
-- **[Gemma 4 12B](https://huggingface.co/google/gemma-4-12b-it)** - Modelo de lenguaje de Google
-- **[Qwen3.5 9B](https://huggingface.co/Qwen/Qwen3.5-9B)** - Modelo de lenguaje de Alibaba Cloud
+Usuario del contenedor: `oceanos`. Los modelos viven en el volumen Docker `llm-models` y sobreviven a parar/borrar el contenedor.
 
 ## Requisitos
 
 - GPU NVIDIA (probado: RTX 5070 Ti 16 GB) con driver reciente.
 - Docker con soporte GPU (Docker Desktop + WSL2, o Docker Engine + `nvidia-container-toolkit`).
-- VS Code + extensión Dev Containers (o `devcontainer` CLI).
+- Opcional: VS Code + extensión Dev Containers.
 
-## Uso
+## Una sola instancia: VS Code y terminal comparten contenedor
 
-1. Abrir el repo en VS Code → `F1` → **Dev Containers: Reopen in Container**.
-   - Primera vez: compila llama.cpp (~10-20 min) y descarga modelos (~13 GB) al volumen `llm-models`.
-2. `llama-server` se levanta solo como proceso principal del contenedor (router, puerto `9931`, log `/tmp/llama-server.log`).
-   Tras cambiar algo en `.devcontainer/`: `F1` → **Dev Containers: Rebuild Container**.
-3. Abrir una terminal en VS Code (`` Ctrl+` ``) y ejecutar:
+VS Code (`devcontainer.json`) y `local-llm.sh` usan el **mismo** contenedor, `local-llm-dev`. Con 16 GB de VRAM no conviene tener dos `llama-server` con modelo cargado, así que no hay instancias independientes:
 
-   ```bash
-   pi
-   ```
+- Arrancado desde VS Code → `./local-llm.sh pi` desde una terminal del host entra en ese mismo contenedor.
+- Arrancado desde terminal → en VS Code usar `F1` → **Dev Containers: Attach to Running Container** → `local-llm-dev`.
+  (**Reopen in Container** fallaría con "name already in use"; antes `./local-llm.sh --stop`.)
+- La terminal integrada de VS Code ya está *dentro* del contenedor: ahí se usa `pi` directamente, no `local-llm.sh`.
 
-   Arranca con `qwen3.5-9b` seleccionado. Escribir el prompt y `Enter`.
+## Uso desde terminal (host)
 
-### Cambiar de modelo en pi
+```bash
+./local-llm.sh --start     # construye imagen (caché), arranca, descarga modelos que falten
+./local-llm.sh pi          # abre pi dentro del contenedor (lo arranca si hace falta)
+./local-llm.sh --status    # estado, origen (VS Code/terminal), puerto, modelos
+./local-llm.sh --logs      # log de llama-server
+./local-llm.sh --restart
+./local-llm.sh --stop      # elimina el contenedor; los modelos se conservan
+./local-llm.sh --cleanup   # elimina contenedor y, si confirmas, volumen e imagen
+```
 
----
+Primera vez: compilar llama.cpp ~10-20 min + descargar ~5.7 GB. API en `http://localhost:9931` (solo localhost); otro puerto: `LOCAL_LLM_PORT=9932 ./local-llm.sh --start`.
+
+El contenedor **no se para solo**: mientras corre ocupa VRAM. Párelo con `--stop` cuando no lo use.
+
+## Uso desde VS Code
+
+`F1` → **Dev Containers: Reopen in Container**. Tras cambiar algo en `.devcontainer/`: **Dev Containers: Rebuild Container**.
+En la terminal integrada (`` Ctrl+` ``): `pi`.
+
+## pi
+
+Usa `qwen3.5-9b` (único modelo configurado).
 
 | Acción | Cómo |
 |---|---|
-| Elegir modelo de una lista | `/model` (o `Ctrl+L`) → elegir `gemma-4-12b` / `qwen3.5-9b` |
-| Alternar entre los dos | `Ctrl+P` |
-| Guardar el elegido como inicial | `Ctrl+S` dentro de `/model` |
-| Nivel de razonamiento (thinking) | `Shift+Tab` |
+| Nivel de razonamiento | `Shift+Tab` |
 | Salir | `Ctrl+C` dos veces |
 
-Solo un modelo cabe en VRAM a la vez: al cambiar, el primer mensaje tarda unos segundos mientras el router descarga uno y carga el otro.
+## Comprobar el servidor
 
-Arrancar pi directamente con un modelo: `pi --model llama-cpp/gemma-4-12b`.
-
----
-
-## 🐳 Uso desde Terminal (sin VS Code)
-
-Si prefieres no usar VS Code, puedes arrancar el contenedor directamente desde una terminal de Ubuntu:
-
-### 1️⃣ Arrancar el contenedor
-
-```bash
-cd /ruta/al/repo
-chmod +x .devcontainer/start-from-terminal.sh
-./devcontainer/start-from-terminal.sh
-```
-
-**⚠️ IMPORTANTE:** La carpeta de configuración es `.devcontainer` (con el punto). El script la busca correctamente desde la raíz del proyecto.
-
-### 2️⃣ Acceder a pi
-
-```bash
-docker exec -it llm-setup-dev pi
-```
-
-O primero entrar al bash y luego ejecutar:
-```bash
-docker exec -it llm-setup-dev bash
-pi
-```
-
-Esto hará:
-- ✅ Verificar Docker y GPU
-- ✅ Crear el volumen para modelos (si no existe)
-- ✅ Construir la imagen Docker (primera vez, ~10-20 min)
-- ✅ Descargar los modelos (~13 GB al volumen `llm-models`)
-- ✅ Arrancar el contenedor con `llama-server` corriendo
-
-### 2️⃣ Acceder a pi
-
-```bash
-docker exec -it llm-setup-dev bash
-pi
-```
-
-O directamente:
-```bash
-docker exec -it llm-setup-dev pi
-```
-
-### 3️⃣ Ver estado y logs
-
-```bash
-docker ps                    # Ver contenedor corriendo
-docker logs -f llm-setup-dev # Ver logs del servidor
-docker exec llm-setup-dev pi # Acceder a pi
-```
-
-### 4️⃣ Detener cuando termines
-
-```bash
-chmod +x .devcontainer/stop-container.sh
-./devcontainer/stop-container.sh
-```
-
-**Nota:** Puedes ejecutarlo desde cualquier lugar si usas rutas absolutas, o desde la raíz del proyecto.
-
-### 5️⃣ Accesos directos Docker
-
-| Acción | Comando |
-|--------|---------|
-| Arrancar | `./devcontainer/start-from-terminal.sh` |
-| Ver logs | `docker logs -f llm-setup-dev` |
-| Acceder a pi | `docker exec -it llm-setup-dev pi` |
-| Detener | `./devcontainer/stop-container.sh` |
-
----
-
-## 🔧 Configuración
-
-| Qué | Dónde |
-|---|---|
-| Versión llama.cpp / arquitectura CUDA | `.devcontainer/devcontainer.json` |
-| Contexto y capas GPU por modelo | `.devcontainer/models.ini` |
-| Modelos de pi | `.devcontainer/pi-models.json` → `~/.pi/agent/models.json` |
-| Modelo inicial de pi | `.devcontainer/pi-settings.json` → `~/.pi/agent/settings.json` |
-| Lista de descargas | `.devcontainer/download-models.sh` |
-
-`HF_TOKEN` del host se pasa al contenedor si existe (solo necesario para repos con acceso restringido).
-
----
-
-## 📊 Recursos aproximados
-
-| Recurso | Uso típico |
-|---------|------------|
-| RAM | ~2.0 GB (solo modelo cargado) |
-| VRAM | ~6-7 GB (dependiendo del modelo) |
-| Disco | ~13 GB (modelos en volumen persistente) |
-| CPU | ~10-15% durante inferencia |
-
-*Valores aproximados para RTX 5070 Ti 16 GB*
-
----
-
-## 📝 Notas importantes
-
-- **Carpeta `.devcontainer`**: Es una carpeta oculta (empieza con punto). Contiene `Dockerfile`, scripts de terminal, etc.
-- **Dockerfile**: Está **dentro** de `.devcontainer/`, no en la raíz del proyecto
-- **Persistencia**: Los modelos se guardan en un volumen Docker (`llm-models`) para no perderlos al reinizar
-- **Primera vez**: La construcción de llama.cpp puede tardar 10-20 minutos.
-- **Rebuild**: Después de modificar `.devcontainer/`, usa `docker build` o `F1 → Dev Containers: Rebuild Container` en VS Code.
-
-## ⏸️ Detener el contenedor
-
-**Importante:** El contenedor **NO** se detiene solo. Debes detenerlo manualmente:
-
-```bash
-# Detener temporalmente (los modelos se conservan)
-./devcontainer/stop-container.sh
-
-# O detener desde terminal
-docker stop llm-setup-dev
-docker rm llm-setup-dev
-```
-
-### ¿Qué pasa con los modelos?
-
-| Acción | ¿Se borran los modelos? |
-|--------|------------------------|
-| Detener contenedor | ❌ NO |
-| Eliminar contenedor | ❌ NO |
-| Eliminar volumen | ✅ SÍ (~13 GB) |
-
-**Los modelos (~13 GB) se conservan siempre que no elimines el volumen `llm-models`.**
-
-### Limpieza completa (opcional)
-
-```bash
-# Detener contenedor y eliminar volumen
-./devcontainer/cleanup.sh --all
-```
-
-**⚠️ Advertencia:** Esto borra **todos los modelos (~13 GB)**.
-
-## 📚 Guía completa
-
-Para instrucciones detalladas sobre usar, detener y limpiar, ver: `.devcontainer/HELP.md`
-
-## 📊 Recursos en uso
-
-| Recurso | Uso típico | Estado cuando está activo |
-|---------|------------|--------------------------|
-| RAM | ~2.0 GB | Continuo hasta detener |
-| VRAM | ~6-7 GB | Solo el modelo cargado |
-| Disco | ~13 GB | Guardado en volumen persistente |
-| CPU | ~10-15% | Solo durante inferencia |
-| Puerto | 9931 | Abierto mientras esté activo |
-
-**Tip:** Detén el contenedor cuando no lo uses para ahorrar recursos! 🚀
-
-| Recurso | Uso típico |
-|---------|------------|
-| RAM | ~2.0 GB (solo modelo cargado) |
-| VRAM | ~6-7 GB (dependiendo del modelo) |
-| Disco | ~13 GB (modelos en volumen persistente) |
-| CPU | ~10-15% durante inferencia |
-
-*Valores aproximados para RTX 5070 Ti 16 GB*
-
-### Comprobar el servidor
-
-Si pi muestra `Connection error`, el servidor no está corriendo. Relanzarlo a mano:
+Si pi muestra `Connection error`, `llama-server` no corre. Dentro del contenedor:
 
 ```bash
 nohup llama-server --models-preset /etc/llama/models.ini --models-max 1 --host 0.0.0.0 --port 9931 > /tmp/llama-server.log 2>&1 &
-```
-
-```bash
-tail -f /tmp/llama-server.log
 curl localhost:9931/models
 curl localhost:9931/v1/chat/completions -H 'Content-Type: application/json' \
   -d '{"model":"qwen3.5-9b","messages":[{"role":"user","content":"hola"}]}'
@@ -240,10 +68,14 @@ curl localhost:9931/v1/chat/completions -H 'Content-Type: application/json' \
 
 | Qué | Dónde |
 |---|---|
-| Versión llama.cpp / arquitectura CUDA | `build.args` en `.devcontainer/devcontainer.json` |
-| Contexto y capas GPU por modelo | `.devcontainer/models.ini` |
+| Versión llama.cpp / arquitectura CUDA | `ARG` en `.devcontainer/Dockerfile` |
+| Contexto y capas GPU | `.devcontainer/models.ini` |
 | Modelos de pi | `.devcontainer/pi-models.json` → `~/.pi/agent/models.json` |
 | Modelo inicial de pi | `.devcontainer/pi-settings.json` → `~/.pi/agent/settings.json` |
 | Lista de descargas | `.devcontainer/download-models.sh` |
 
-`HF_TOKEN` del host se pasa al contenedor si existe (solo necesario para repos con acceso restringido).
+`HF_TOKEN` del host se pasa al contenedor si existe (solo para repos con acceso restringido).
+
+## Recursos
+
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) · [pi](https://pi.dev) · [Qwen3.5 9B](https://huggingface.co/Qwen/Qwen3.5-9B)

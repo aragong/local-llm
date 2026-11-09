@@ -4,7 +4,6 @@ set -euo pipefail
 
 DEST=${MODELS_DIR:-/models}
 MODELS=(
-  "unsloth/gemma-4-12b-it-GGUF gemma-4-12b-it-Q4_K_M.gguf"
   "unsloth/Qwen3.5-9B-GGUF Qwen3.5-9B-Q4_K_M.gguf"
 )
 

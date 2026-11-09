@@ -43,10 +43,10 @@ RUN userdel -r ubuntu \
     && echo "oceanos ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/oceanos \
     && mkdir -p /models && chown oceanos:oceanos /models
 
-COPY models.ini /etc/llama/models.ini
-COPY --chmod=755 download-models.sh /usr/local/bin/download-models.sh
-COPY --chown=oceanos:oceanos pi-models.json /home/oceanos/.pi/agent/models.json
-COPY --chown=oceanos:oceanos pi-settings.json /home/oceanos/.pi/agent/settings.json
+COPY .devcontainer/models.ini /etc/llama/models.ini
+COPY --chmod=755 .devcontainer/download-models.sh /usr/local/bin/download-models.sh
+COPY --chown=oceanos:oceanos .devcontainer/pi-models.json /home/oceanos/.pi/agent/models.json
+COPY --chown=oceanos:oceanos .devcontainer/pi-settings.json /home/oceanos/.pi/agent/settings.json
 
 USER oceanos
 WORKDIR /home/oceanos

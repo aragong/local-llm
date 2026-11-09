@@ -2,13 +2,9 @@
   "name": "llm-setup (llama.cpp + pi)",
   "build": {
     "dockerfile": "Dockerfile",
-    "context": ".",
-    "args": {
-      "LLAMA_CPP_TAG": "b12167",
-      "CUDA_ARCH": "120"
-    }
+    "context": ".."
   },
-  "runArgs": ["--gpus=all"],
+  "runArgs": ["--gpus=all", "--name", "local-llm-dev"],
   "mounts": ["source=llm-models,target=/models,type=volume"],
   "containerUser": "oceanos",
   "remoteUser": "oceanos",
