@@ -4,7 +4,8 @@ set -euo pipefail
 
 DEST=${MODELS_DIR:-/models}
 MODELS=(
-  "unsloth/Qwen3.5-9B-GGUF Qwen3.5-9B-Q4_K_M.gguf"
+  "unsloth/Qwen3.5-9B-GGUF Qwen3.5-9B-Q4_K_M.gguf"                                  # ~5.7 GB
+  "unsloth/DeepSeek-R1-Distill-Qwen-14B-GGUF DeepSeek-R1-Distill-Qwen-14B-Q5_K_M.gguf"  # ~10.5 GB
 )
 
 auth=()
