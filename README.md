@@ -58,8 +58,20 @@ Arranca con `qwen3.5-9b`. Cambiar de modelo: `/model` → `deepseek-r1-14b`.
 
 | Acción | Cómo |
 |---|---|
+| Buscar en internet | Pedirlo en el prompt: el modelo usa la herramienta `web_search` |
 | Nivel de razonamiento | `Shift+Tab` |
 | Salir | `Ctrl+C` dos veces |
+
+### Búsqueda web (SearXNG)
+
+`web_search` la añade la extensión [`@oresk/pi-searxng`](https://www.npmjs.com/package/@oresk/pi-searxng) y la sirve [SearXNG](https://docs.searxng.org/), un metabuscador que corre dentro del mismo contenedor (`127.0.0.1:8888`, no expuesto al host). Sin claves ni cuotas: consulta Google, Brave, DuckDuckGo… directamente; si alguno bloquea (CAPTCHA), usa el resto. Solo salen a internet las consultas, nunca la conversación.
+
+Qwen usa la herramienta bien; DeepSeek R1 no está entrenado para herramientas.
+
+```bash
+curl "$SEARXNG_URL/search?q=test&format=json"   # dentro del contenedor
+tail /tmp/searxng.log
+```
 
 ## Comprobar el servidor
 
@@ -81,6 +93,8 @@ curl localhost:9931/v1/chat/completions -H 'Content-Type: application/json' \
 | Modelos de pi | `.devcontainer/pi-models.json` → `~/.pi/agent/models.json` |
 | Modelo inicial de pi | `.devcontainer/pi-settings.json` → `~/.pi/agent/settings.json` |
 | Lista de descargas | `.devcontainer/download-models.sh` |
+| SearXNG (motores, puerto) | `.devcontainer/searxng-settings.yml`; versión: `ARG SEARXNG_REF` en el `Dockerfile` |
+| Extensiones de pi | `RUN pi install …` en el `Dockerfile` |
 
 Cambios en `.devcontainer/` van dentro de la imagen: aplicar con `./local-llm.sh --stop && ./local-llm.sh --start` (o **Rebuild Container** en VS Code).
 

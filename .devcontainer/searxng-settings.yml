@@ -1,0 +1,10 @@
+# SearXNG para la herramienta web_search de pi. Solo cambios sobre los defaults.
+use_default_settings: true
+server:
+  bind_address: "127.0.0.1"   # solo accesible dentro del contenedor
+  port: 8888
+  # ponytail: clave fija; vale porque no se expone fuera del contenedor. Rotar si se publica el puerto.
+  secret_key: "local-llm-searxng-not-exposed"
+  limiter: false
+search:
+  formats: [html, json]       # pi-searxng pide format=json

@@ -26,12 +26,22 @@ RUN cmake -B build \
 FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl ca-certificates git sudo libcurl4 libssl3 libgomp1 \
+        curl ca-certificates git sudo libcurl4 libssl3 libgomp1 python3 python3-venv \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+
+# SearXNG (metabuscador local, sin claves) para la herramienta web_search de pi.
+ARG SEARXNG_REF=57ff753ad416b7bf27e59d72ae8c7cac93b56be4
+RUN git init -q /opt/searxng/src && cd /opt/searxng/src \
+    && git fetch -q --depth 1 https://github.com/searxng/searxng ${SEARXNG_REF} && git checkout -q FETCH_HEAD \
+    && python3 -m venv /opt/searxng/venv \
+    && /opt/searxng/venv/bin/pip install --no-cache-dir -q -r requirements.txt
+COPY .devcontainer/searxng-settings.yml /etc/searxng/settings.yml
+ENV SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml \
+    SEARXNG_URL=http://127.0.0.1:8888
 
 COPY --from=builder /opt/llama.cpp /opt/llama.cpp
 ENV PATH=/opt/llama.cpp/bin:${PATH} \
@@ -50,7 +60,8 @@ COPY --chown=oceanos:oceanos .devcontainer/pi-settings.json /home/oceanos/.pi/ag
 
 USER oceanos
 WORKDIR /home/oceanos
+RUN pi install npm:@oresk/pi-searxng@0.2.2
 
-# Router llama.cpp como proceso del contenedor (no depende de sesiones exec de VS Code).
-# ponytail: sin reinicio automático si llama-server cae; relanzar el contenedor o a mano (ver README).
-CMD ["sh", "-c", "llama-server --models-preset /etc/llama/models.ini --models-max 1 --host 0.0.0.0 --port 9931 > /tmp/llama-server.log 2>&1 & exec sleep infinity"]
+# Router llama.cpp y SearXNG como procesos del contenedor (no dependen de sesiones exec de VS Code).
+# ponytail: sin reinicio automático si alguno cae; relanzar el contenedor o a mano (ver README).
+CMD ["sh", "-c", "cd /opt/searxng/src && /opt/searxng/venv/bin/python -m searx.webapp > /tmp/searxng.log 2>&1 & llama-server --models-preset /etc/llama/models.ini --models-max 1 --host 0.0.0.0 --port 9931 > /tmp/llama-server.log 2>&1 & exec sleep infinity"]
