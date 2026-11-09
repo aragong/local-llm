@@ -1,4 +1,4 @@
-# llm-setup
+# local-llm
 
 Contenedor con [llama.cpp](https://github.com/ggml-org/llama.cpp) (compilado con CUDA para Blackwell / RTX 50xx) + [pi](https://pi.dev) y un modelo local:
 

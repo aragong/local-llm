@@ -1,5 +1,5 @@
 {
-  "name": "llm-setup (llama.cpp + pi)",
+  "name": "local-llm (llama.cpp + pi)",
   "build": {
     "dockerfile": "Dockerfile",
     "context": ".."
