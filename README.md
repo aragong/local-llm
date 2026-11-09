@@ -53,7 +53,7 @@ Arranca con `qwen3.5-9b`. Cambiar de modelo: `/model` → `deepseek-r1-14b`.
 
 | Modelo | Para qué | Contexto |
 |---|---|---|
-| `qwen3.5-9b` | Uso general, agente con herramientas | 128k (KV q8_0) |
+| `qwen3.5-9b` | Uso general, agente con herramientas | 256k (KV q8_0) |
 | `deepseek-r1-14b` | Razonamiento matemático/físico (piensa siempre en `<think>`). Flojo usando herramientas de pi: mejor para preguntar que para editar código | 32k (KV q8_0) |
 
 | Acción | Cómo |
