@@ -1,6 +1,6 @@
 # local-llm
 
-Contenedor con [llama.cpp](https://github.com/ggml-org/llama.cpp) (compilado con CUDA para Blackwell / RTX 50xx) + [pi](https://pi.dev) y modelos locales:
+Contenedor con [llama.cpp](https://github.com/ggml-org/llama.cpp) (compilado con CUDA para Blackwell / RTX 50xx) + [pi](https://pi.dev), búsqueda web local con [SearXNG](https://docs.searxng.org/) y modelos locales:
 
 | Modelo | Fichero | Tamaño |
 |---|---|---|
@@ -38,7 +38,7 @@ VS Code (`devcontainer.json`) y `local-llm.sh` usan el **mismo** contenedor, `lo
 ./local-llm.sh --cleanup   # elimina contenedor y, si confirmas, volumen e imagen
 ```
 
-Primera vez: compilar llama.cpp ~10-20 min + descargar ~15 GB. API en `http://localhost:9931` (solo localhost); otro puerto: `LOCAL_LLM_PORT=9932 ./local-llm.sh --start`.
+Primera vez: compilar llama.cpp ~10-20 min + instalar SearXNG ~1 min + descargar ~15 GB. API en `http://localhost:9931` (solo localhost); otro puerto: `LOCAL_LLM_PORT=9932 ./local-llm.sh --start`.
 
 El contenedor **no se para solo**: mientras corre ocupa VRAM. Párelo con `--stop` cuando no lo use.
 
@@ -64,14 +64,40 @@ Arranca con `qwen3.5-9b`. Cambiar de modelo: `/model` → `deepseek-r1-14b`.
 
 ### Búsqueda web (SearXNG)
 
-`web_search` la añade la extensión [`@oresk/pi-searxng`](https://www.npmjs.com/package/@oresk/pi-searxng) y la sirve [SearXNG](https://docs.searxng.org/), un metabuscador que corre dentro del mismo contenedor (`127.0.0.1:8888`, no expuesto al host). Sin claves ni cuotas: consulta Google, Brave, DuckDuckGo… directamente; si alguno bloquea (CAPTCHA), usa el resto. Solo salen a internet las consultas, nunca la conversación.
+pi puede buscar en internet con la herramienta `web_search`, sin claves de API ni cuotas y sin salir del contenedor:
 
-Qwen usa la herramienta bien; DeepSeek R1 no está entrenado para herramientas.
+```
+pi ──web_search──▶ @oresk/pi-searxng ──HTTP──▶ SearXNG (127.0.0.1:8888) ──▶ Google, Brave, DuckDuckGo…
+```
+
+- [SearXNG](https://docs.searxng.org/) es un metabuscador de código abierto. Arranca junto a `llama-server` dentro de `local-llm-dev`, escucha solo en `127.0.0.1:8888` (no se publica al host) y consulta los buscadores desde tu IP, combinando resultados.
+- La extensión [`@oresk/pi-searxng`](https://www.npmjs.com/package/@oresk/pi-searxng) (MIT, un fichero, sin dependencias) registra `web_search` en pi y llama a SearXNG vía `SEARXNG_URL`.
+- Privacidad: solo salen a internet las consultas de búsqueda; la conversación y el código siguen en local.
+
+**Por qué SearXNG y no `pi-web-search`:** ese paquete delega en la búsqueda nativa del proveedor del modelo (Gemini, OpenAI, Anthropic…). Con llama.cpp (o vLLM, Ollama local…) no hay búsqueda nativa: necesitaría un modelo en la nube con clave. SearXNG es la única opción 100 % local.
+
+**Uso:** pedirlo en el prompt. Ejemplos:
+
+```
+Busca en internet la última versión de llama.cpp y resume sus cambios.
+Busca en la categoría science artículos recientes sobre turbulencia en flujos costeros.
+```
+
+El modelo puede filtrar por categoría (`general`, `it`, `science`, `news`, `repos`…), idioma, fecha o motor concreto. Qwen usa la herramienta bien; DeepSeek R1 no está entrenado para herramientas. Revisa las fuentes citadas: un modelo de 9B puede elegir resultados poco fiables.
+
+**Comprobar / solucionar** (dentro del contenedor):
 
 ```bash
-curl "$SEARXNG_URL/search?q=test&format=json"   # dentro del contenedor
+curl -s "$SEARXNG_URL/search?q=test&format=json" | head -c 300   # debe devolver JSON con "results"
 tail /tmp/searxng.log
+# Si no responde (no hay reinicio automático), relanzarlo:
+cd /opt/searxng/src && nohup /opt/searxng/venv/bin/python -m searx.webapp > /tmp/searxng.log 2>&1 &
 ```
+
+- `unresponsive_engines` con `CAPTCHA` o `too many requests` es normal: algunos buscadores bloquean peticiones automáticas y SearXNG usa los demás. Si uno falla siempre, desactivarlo en `.devcontainer/searxng-settings.yml` (ver [engines](https://docs.searxng.org/admin/settings/settings_engines.html)).
+- En el log, `torch: can't register engine` y `missing config file: limiter.toml` son avisos inofensivos.
+
+**Actualizar SearXNG:** cambiar `ARG SEARXNG_REF` en el `Dockerfile` por un commit reciente de [searxng/searxng](https://github.com/searxng/searxng/commits/master) y reconstruir. La extensión se actualiza cambiando la versión en `RUN pi install npm:@oresk/pi-searxng@…`.
 
 ## Comprobar el servidor
 
@@ -102,4 +128,4 @@ Cambios en `.devcontainer/` van dentro de la imagen: aplicar con `./local-llm.sh
 
 ## Recursos
 
-- [llama.cpp](https://github.com/ggml-org/llama.cpp) · [pi](https://pi.dev) · [Qwen3.5 9B](https://huggingface.co/Qwen/Qwen3.5-9B) · [DeepSeek-R1-Distill-Qwen-14B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-14B)
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) · [pi](https://pi.dev) · [Qwen3.5 9B](https://huggingface.co/Qwen/Qwen3.5-9B) · [DeepSeek-R1-Distill-Qwen-14B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-14B) · [SearXNG](https://docs.searxng.org/) · [@oresk/pi-searxng](https://www.npmjs.com/package/@oresk/pi-searxng)
