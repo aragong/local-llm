@@ -111,14 +111,13 @@ cd /opt/searxng/src && nohup /opt/searxng/venv/bin/python -m searx.webapp > /tmp
   ```
 
   También expone la API de A1111 (`/sdapi/v1/txt2img`) y la propia (`/sdcpp/v1/...`): ver [api.md](https://github.com/leejet/stable-diffusion.cpp/blob/master/examples/server/api.md).
-- **CLI** con `sd-cli`, sin pasar por el servidor. Abrir una terminal en el contenedor (`./local-llm.sh shell` desde el host, o la terminal integrada de VS Code) y:
+- **CLI** con `sd-cli`, sin pasar por el servidor. Abrir una terminal en el contenedor (`./local-llm.sh shell` desde el host, o la terminal integrada de VS Code) y, desde cualquier carpeta:
 
   ```bash
-  cd /models/sd
   sd-cli \
-    --diffusion-model diffusion_models/flux-2-klein-4b-Q6_K.gguf \
-    --llm text_encoders/Qwen3-4B-Q6_K.gguf \
-    --vae vae/flux2-vae.safetensors \
+    --diffusion-model $FLUX_DIT \
+    --llm $FLUX_LLM \
+    --vae $FLUX_VAE \
     -p "Un astronauta descansando en una playa tropical al atardecer, estilo cinematografico" \
     --cfg-scale 1.0 \
     --steps 4 \
@@ -127,7 +126,9 @@ cd /opt/searxng/src && nohup /opt/searxng/venv/bin/python -m searx.webapp > /tmp
     -o ~/test.png
   ```
 
-  ~4 s por imagen. klein está destilado para 4 pasos con `--cfg-scale 1.0`; la variante *base* usaría ~20 pasos y CFG ~4. `--flash-attn on` ahorra VRAM (sustituye al obsoleto `--diffusion-fa`; por defecto ya es `auto`). Para ver la imagen desde Windows: `docker cp local-llm-dev:/home/oceanos/test.png .` en el host, o `code ~/test.png` desde la terminal integrada de VS Code.
+  ~4 s por imagen. `$FLUX_DIT`, `$FLUX_LLM` y `$FLUX_VAE` son variables de entorno del contenedor con las rutas del modelo, el codificador de texto y el VAE (definidas en el `Dockerfile`). klein está destilado para 4 pasos con `--cfg-scale 1.0`; la variante *base* usaría ~20 pasos y CFG ~4. `--flash-attn on` ahorra VRAM (sustituye al obsoleto `--diffusion-fa`).
+
+  Para ver la imagen desde Windows: `docker cp local-llm-dev:/home/oceanos/test.png .` en el host, o `code ~/test.png` desde la terminal integrada de VS Code.
 
 **VRAM: convive con Qwen.** `sd-server` usa `--offload-to-cpu`: los pesos (~7 GB) quedan en RAM y solo suben a la GPU mientras genera, así que en reposo no ocupa VRAM. Medido en la RTX 5070 Ti, 1024×1024:
 
@@ -148,7 +149,7 @@ nohup sd-server.sh > /tmp/sd-server.log 2>&1 &                 # si no responde
 
 `sd-server.sh` espera a que estén los tres ficheros del modelo (en el primer arranque se descargan después de arrancar el contenedor).
 
-**Otros modelos de imagen:** añadir sus ficheros a `download-models.sh` con la subcarpeta de categoría (`sd/diffusion_models`, `sd/text_encoders`, `sd/vae`…) y elegirlos en la Web UI con su *recipe* (botón **Model**). Ver la [lista de modelos soportados](https://github.com/leejet/stable-diffusion.cpp/tree/master/docs/models). Para cambiar el modelo precargado, editar `.devcontainer/sd-server.sh`.
+**Otros modelos de imagen:** añadir sus ficheros a `download-models.sh` con la subcarpeta de categoría (`sd/diffusion_models`, `sd/text_encoders`, `sd/vae`…) y elegirlos en la Web UI con su *recipe* (botón **Model**). Ver la [lista de modelos soportados](https://github.com/leejet/stable-diffusion.cpp/tree/master/docs/models). Para cambiar el modelo precargado (y las variables `$FLUX_*`), editar `ENV FLUX_*` en el `Dockerfile`.
 
 ## Comprobar el servidor
 
@@ -170,7 +171,8 @@ curl localhost:9931/v1/chat/completions -H 'Content-Type: application/json' \
 | Modelos de pi | `.devcontainer/pi-models.json` → `~/.pi/agent/models.json` |
 | Modelo inicial de pi | `.devcontainer/pi-settings.json` → `~/.pi/agent/settings.json` |
 | Lista de descargas | `.devcontainer/download-models.sh` |
-| Modelo de imagen precargado, opciones de sd-server | `.devcontainer/sd-server.sh` |
+| Modelo de imagen precargado (`$FLUX_*`) | `ENV FLUX_*` en `.devcontainer/Dockerfile` |
+| Opciones de sd-server | `.devcontainer/sd-server.sh` |
 | SearXNG (motores, puerto) | `.devcontainer/searxng-settings.yml`; versión: `ARG SEARXNG_REF` en el `Dockerfile` |
 | Extensiones de pi | `RUN pi install …` en el `Dockerfile` |
 

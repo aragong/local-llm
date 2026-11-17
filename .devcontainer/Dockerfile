@@ -81,6 +81,10 @@ RUN userdel -r ubuntu \
 COPY .devcontainer/models.ini /etc/llama/models.ini
 COPY --chmod=755 .devcontainer/download-models.sh /usr/local/bin/download-models.sh
 COPY --chmod=755 .devcontainer/sd-server.sh /usr/local/bin/sd-server.sh
+# Modelo de imagen (FLUX.2 klein 4B): rutas únicas para sd-server.sh y para usar sd-cli sin escribirlas.
+ENV FLUX_DIT=/models/sd/diffusion_models/flux-2-klein-4b-Q6_K.gguf \
+    FLUX_LLM=/models/sd/text_encoders/Qwen3-4B-Q6_K.gguf \
+    FLUX_VAE=/models/sd/vae/flux2-vae.safetensors
 COPY --chown=oceanos:oceanos .devcontainer/pi-models.json /home/oceanos/.pi/agent/models.json
 COPY --chown=oceanos:oceanos .devcontainer/pi-settings.json /home/oceanos/.pi/agent/settings.json
 
