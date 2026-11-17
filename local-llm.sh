@@ -10,6 +10,7 @@ NAME=local-llm-dev
 IMAGE=local-llm-dev
 VOLUME=llm-models
 PORT=${LOCAL_LLM_PORT:-9931}
+SD_PORT=${LOCAL_SD_PORT:-7860}
 
 exists()  { docker container inspect "$NAME" &>/dev/null; }
 running() { [[ "$(docker container inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null)" == true ]]; }
@@ -24,11 +25,11 @@ Uso: local-llm <opción>
   --stop     Detener y eliminar el contenedor (los modelos se conservan en el volumen)
   --restart  Reiniciar el contenedor
   --status   Estado del contenedor, puerto y modelos
-  --logs     Seguir el log de llama-server
+  --logs     Seguir el log de llama-server (--logs sd: el de sd-server)
   --cleanup  Eliminar contenedor y, si confirmas, volumen e imagen
   pi         Abrir pi dentro del contenedor (lo arranca si hace falta)
 
-Puerto del host: 9931 (cambiar con LOCAL_LLM_PORT=9932 local-llm --start)
+Puertos del host: API 9931 (LOCAL_LLM_PORT), imágenes 7860 (LOCAL_SD_PORT). Ej.: LOCAL_LLM_PORT=9932 local-llm --start
 EOF
 }
 
@@ -46,19 +47,20 @@ start() {
         echo "📦 Construyendo imagen (rápido si no hay cambios)..."
         docker build -t "$IMAGE" -f "$REPO/.devcontainer/Dockerfile" "$REPO"
         docker volume create "$VOLUME" >/dev/null
-        echo "🚀 Creando contenedor '$NAME' (localhost:$PORT → 9931)..."
+        echo "🚀 Creando contenedor '$NAME' (localhost:$PORT → 9931, localhost:$SD_PORT → 7860)..."
         # llama-server escucha siempre en 9931 dentro del contenedor; solo cambia el puerto del host.
         docker run -d --init --name "$NAME" --gpus all \
-            -v "$VOLUME":/models -p "127.0.0.1:$PORT:9931" \
+            -v "$VOLUME":/models -p "127.0.0.1:$PORT:9931" -p "127.0.0.1:$SD_PORT:7860" \
             -e HF_TOKEN="${HF_TOKEN:-}" "$IMAGE" >/dev/null || {
             docker rm "$NAME" &>/dev/null || true
-            echo "❌ No se pudo arrancar. ¿Puerto $PORT ocupado? Prueba: LOCAL_LLM_PORT=9932 local-llm --start"
+            echo "❌ No se pudo arrancar. ¿Puerto $PORT o $SD_PORT ocupado? Prueba: LOCAL_LLM_PORT=9932 LOCAL_SD_PORT=7861 local-llm --start"
             exit 1
         }
     fi
     echo "⬇️  Comprobando modelos..."
     docker exec "$NAME" download-models.sh
     echo "✅ Listo. pi: local-llm pi · API: $(docker port "$NAME" 9931 2>/dev/null || echo 'sin publicar (VS Code la reenvía)')"
+    echo "🎨 Imágenes (Web UI): http://$(docker port "$NAME" 7860 2>/dev/null || echo 'localhost:7860 (VS Code la reenvía)')"
 }
 
 stop() {
@@ -71,8 +73,9 @@ status() {
     if running; then
         echo "🟢 '$NAME' corriendo (arrancado desde $(origin))"
         echo "   API host: $(docker port "$NAME" 9931 2>/dev/null || echo 'sin publicar (VS Code la reenvía)')"
+        echo "   Imágenes: $(docker port "$NAME" 7860 2>/dev/null || echo 'sin publicar (VS Code la reenvía)')"
         docker stats --no-stream --format '   CPU {{.CPUPerc}} · RAM {{.MemUsage}}' "$NAME"
-        docker exec "$NAME" sh -c 'ls -lh /models/*.gguf 2>/dev/null | awk "{print \"   \" \$5, \$9}"; du -sh /models | sed "s/^/   total /"'
+        docker exec "$NAME" sh -c 'find /models -type f \( -name "*.gguf" -o -name "*.safetensors" \) -exec ls -lh {} + | awk "{print \"   \" \$5, \$9}"; du -sh /models | sed "s/^/   total /"'
     elif exists; then
         echo "⏸️  '$NAME' detenido (creado desde $(origin))"
     else
@@ -83,7 +86,7 @@ status() {
 
 logs() {
     running || { echo "⚠️  '$NAME' no está corriendo"; exit 1; }
-    docker exec "$NAME" tail -n 50 -f /tmp/llama-server.log
+    docker exec "$NAME" tail -n 50 -f "/tmp/${1:-llama}-server.log"
 }
 
 cleanup() {
@@ -101,7 +104,7 @@ case "${1:-}" in
     --stop)    stop ;;
     --restart) running && docker restart "$NAME" >/dev/null && echo "✅ Reiniciado" || start ;;
     --status)  status ;;
-    --logs)    logs ;;
+    --logs)    logs "${2:-}" ;;
     --cleanup) cleanup ;;
     pi)        running || start; docker exec -it "$NAME" pi ;;
     --help|-h) show_help ;;

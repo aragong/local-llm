@@ -14,5 +14,5 @@
   "overrideCommand": false,
   "init": true,
   "postCreateCommand": "download-models.sh",
-  "forwardPorts": [9931]
+  "forwardPorts": [9931, 7860]
 }

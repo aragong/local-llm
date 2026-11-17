@@ -1,15 +1,17 @@
 # local-llm
 
-Contenedor con [llama.cpp](https://github.com/ggml-org/llama.cpp) (compilado con CUDA para Blackwell / RTX 50xx) + [pi](https://pi.dev), búsqueda web local con [SearXNG](https://docs.searxng.org/) y modelos locales:
+Contenedor con [llama.cpp](https://github.com/ggml-org/llama.cpp) (compilado con CUDA para Blackwell / RTX 50xx) + [pi](https://pi.dev), búsqueda web local con [SearXNG](https://docs.searxng.org/) y generación de imágenes con [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp). Modelos locales:
 
 | Modelo | Fichero | Tamaño |
 |---|---|---|
-| Qwen3.5 9B Q4_K_M | `unsloth/Qwen3.5-9B-GGUF` / `Qwen3.5-9B-Q4_K_M.gguf` | ~5.7 GB |
-| DeepSeek R1 Distill Qwen 14B Q4_K_M | `unsloth/DeepSeek-R1-Distill-Qwen-14B-GGUF` / `DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf` | ~9.0 GB |
+| Qwen3.5 9B Q4_K_M (texto, pi) | `unsloth/Qwen3.5-9B-GGUF` / `Qwen3.5-9B-Q4_K_M.gguf` | ~5.7 GB |
+| FLUX.2 [klein] 4B Q6_K (imágenes) | `unsloth/FLUX.2-klein-4B-GGUF` / `flux-2-klein-4b-Q6_K.gguf` | ~3.4 GB |
+| ↳ codificador de texto Qwen3 4B Q6_K | `unsloth/Qwen3-4B-GGUF` / `Qwen3-4B-Q6_K.gguf` | ~3.3 GB |
+| ↳ VAE FLUX.2 | `Comfy-Org/Flux-2-Klein-4B` / `split_files/vae/flux2-vae.safetensors` | ~0.3 GB |
 
-`llama-server` carga un solo modelo a la vez (`--models-max 1`): al pedir otro, descarga el anterior de la VRAM.
+`llama-server` corre en modo router (`--models-preset`): para añadir otro modelo basta una sección en `models.ini`, una entrada en `pi-models.json` y su descarga. `--models-max 1` mantiene uno solo en VRAM.
 
-Usuario del contenedor: `oceanos`. Los modelos viven en el volumen Docker `llm-models` y sobreviven a parar/borrar el contenedor.
+Usuario del contenedor: `oceanos`. Los modelos viven en el volumen Docker `llm-models` (los de imagen en `/models/sd/`) y sobreviven a parar/borrar el contenedor.
 
 ## Requisitos
 
@@ -32,13 +34,13 @@ VS Code (`devcontainer.json`) y `local-llm.sh` usan el **mismo** contenedor, `lo
 ./local-llm.sh --start     # construye imagen (caché), arranca, descarga modelos que falten
 ./local-llm.sh pi          # abre pi dentro del contenedor (lo arranca si hace falta)
 ./local-llm.sh --status    # estado, origen (VS Code/terminal), puerto, modelos
-./local-llm.sh --logs      # log de llama-server
+./local-llm.sh --logs      # log de llama-server (--logs sd: el de sd-server)
 ./local-llm.sh --restart
 ./local-llm.sh --stop      # elimina el contenedor; los modelos se conservan
 ./local-llm.sh --cleanup   # elimina contenedor y, si confirmas, volumen e imagen
 ```
 
-Primera vez: compilar llama.cpp ~10-20 min + instalar SearXNG ~1 min + descargar ~15 GB. API en `http://localhost:9931` (solo localhost); otro puerto: `LOCAL_LLM_PORT=9932 ./local-llm.sh --start`.
+Primera vez: compilar llama.cpp ~10-20 min + stable-diffusion.cpp ~8 min (en paralelo) + instalar SearXNG ~1 min + descargar ~13 GB. API de texto en `http://localhost:9931` y Web UI de imágenes en `http://localhost:7860` (solo localhost); otros puertos: `LOCAL_LLM_PORT=9932 LOCAL_SD_PORT=7861 ./local-llm.sh --start`.
 
 El contenedor **no se para solo**: mientras corre ocupa VRAM. Párelo con `--stop` cuando no lo use.
 
@@ -49,12 +51,7 @@ En la terminal integrada (`` Ctrl+` ``): `pi`.
 
 ## pi
 
-Arranca con `qwen3.5-9b`. Cambiar de modelo: `/model` → `deepseek-r1-14b`.
-
-| Modelo | Para qué | Contexto |
-|---|---|---|
-| `qwen3.5-9b` | Uso general, agente con herramientas | 256k (KV q8_0) |
-| `deepseek-r1-14b` | Razonamiento matemático/físico (piensa siempre en `<think>`). Flojo usando herramientas de pi: mejor para preguntar que para editar código | 44k (KV q8_0) |
+Modelo: `qwen3.5-9b` (uso general, agente con herramientas), contexto 256k (KV q8_0).
 
 | Acción | Cómo |
 |---|---|
@@ -83,7 +80,7 @@ Busca en internet la última versión de llama.cpp y resume sus cambios.
 Busca en la categoría science artículos recientes sobre turbulencia en flujos costeros.
 ```
 
-El modelo puede filtrar por categoría (`general`, `it`, `science`, `news`, `repos`…), idioma, fecha o motor concreto. Qwen usa la herramienta bien; DeepSeek R1 no está entrenado para herramientas. Revisa las fuentes citadas: un modelo de 9B puede elegir resultados poco fiables.
+El modelo puede filtrar por categoría (`general`, `it`, `science`, `news`, `repos`…), idioma, fecha o motor concreto. Revisa las fuentes citadas: un modelo de 9B puede elegir resultados poco fiables.
 
 **Comprobar / solucionar** (dentro del contenedor):
 
@@ -98,6 +95,49 @@ cd /opt/searxng/src && nohup /opt/searxng/venv/bin/python -m searx.webapp > /tmp
 - En el log, `torch: can't register engine` y `missing config file: limiter.toml` son avisos inofensivos.
 
 **Actualizar SearXNG:** cambiar `ARG SEARXNG_REF` en el `Dockerfile` por un commit reciente de [searxng/searxng](https://github.com/searxng/searxng/commits/master) y reconstruir. La extensión se actualiza cambiando la versión en `RUN pi install npm:@oresk/pi-searxng@…`.
+
+## Generación de imágenes (stable-diffusion.cpp)
+
+`sd-server` arranca con el contenedor y deja **FLUX.2 [klein] 4B** listo (texto → imagen y edición con imágenes de referencia, 4 pasos, licencia Apache 2.0):
+
+- **Web UI:** abrir <http://localhost:7860> en el navegador de Windows. El modelo ya aparece cargado como *Command-line model*; escribir el prompt y generar. Para editar una imagen, adjuntarla como referencia y describir el cambio.
+- **API compatible con OpenAI** (desde el host o el contenedor):
+
+  ```bash
+  curl -s localhost:7860/v1/images/generations -H 'Content-Type: application/json' \
+    -d '{"prompt":"a lighthouse on a rocky coast at sunset","size":"1024x1024"}' \
+    | python3 -c "import sys,json,base64; open('out.png','wb').write(base64.b64decode(json.load(sys.stdin)['data'][0]['b64_json']))"
+  ```
+
+  También expone la API de A1111 (`/sdapi/v1/txt2img`) y la propia (`/sdcpp/v1/...`): ver [api.md](https://github.com/leejet/stable-diffusion.cpp/blob/master/examples/server/api.md).
+- **CLI** (dentro del contenedor), sin pasar por el servidor:
+
+  ```bash
+  S=/models/sd; sd-cli --diffusion-model $S/diffusion_models/flux-2-klein-4b-Q6_K.gguf \
+    --llm $S/text_encoders/Qwen3-4B-Q6_K.gguf --vae $S/vae/flux2-vae.safetensors \
+    --cfg-scale 1.0 --steps 4 -W 1024 -H 1024 -p "a lovely cat" -o cat.png
+  ```
+
+**VRAM: convive con Qwen.** `sd-server` usa `--offload-to-cpu`: los pesos (~7 GB) quedan en RAM y solo suben a la GPU mientras genera, así que en reposo no ocupa VRAM. Medido en la RTX 5070 Ti, 1024×1024:
+
+| Situación | Tiempo por imagen | VRAM pico (GPU total) |
+|---|---|---|
+| Solo FLUX | ~4-5 s | 10.7 GB |
+| Con Qwen cargado (256k) | ~6-7 s | 15.8 GB de 16.3 |
+
+Con Qwen cargado se roza el límite: la primera respuesta de pi justo después de generar puede ir más lenta (medido 67 tok/s en vez de ~110) mientras Windows devuelve memoria a la GPU; se recupera en la siguiente. pi **no** genera imágenes por sí mismo (no tiene herramienta para ello): se usan la Web UI, la API o `sd-cli`.
+
+**Comprobar / relanzar** (dentro del contenedor):
+
+```bash
+curl -s localhost:7860/sdcpp/v1/models/status | head -c 200   # "state":"ready"
+tail /tmp/sd-server.log
+nohup sd-server.sh > /tmp/sd-server.log 2>&1 &                 # si no responde
+```
+
+`sd-server.sh` espera a que estén los tres ficheros del modelo (en el primer arranque se descargan después de arrancar el contenedor).
+
+**Otros modelos de imagen:** añadir sus ficheros a `download-models.sh` con la subcarpeta de categoría (`sd/diffusion_models`, `sd/text_encoders`, `sd/vae`…) y elegirlos en la Web UI con su *recipe* (botón **Model**). Ver la [lista de modelos soportados](https://github.com/leejet/stable-diffusion.cpp/tree/master/docs/models). Para cambiar el modelo precargado, editar `.devcontainer/sd-server.sh`.
 
 ## Comprobar el servidor
 
@@ -114,11 +154,12 @@ curl localhost:9931/v1/chat/completions -H 'Content-Type: application/json' \
 
 | Qué | Dónde |
 |---|---|
-| Versión llama.cpp / arquitectura CUDA | `ARG` en `.devcontainer/Dockerfile` |
+| Versión llama.cpp / stable-diffusion.cpp / arquitectura CUDA | `ARG LLAMA_CPP_TAG`, `SD_CPP_TAG`, `CUDA_ARCH` en `.devcontainer/Dockerfile` |
 | Contexto, capas GPU, KV cache, muestreo | `.devcontainer/models.ini` |
 | Modelos de pi | `.devcontainer/pi-models.json` → `~/.pi/agent/models.json` |
 | Modelo inicial de pi | `.devcontainer/pi-settings.json` → `~/.pi/agent/settings.json` |
 | Lista de descargas | `.devcontainer/download-models.sh` |
+| Modelo de imagen precargado, opciones de sd-server | `.devcontainer/sd-server.sh` |
 | SearXNG (motores, puerto) | `.devcontainer/searxng-settings.yml`; versión: `ARG SEARXNG_REF` en el `Dockerfile` |
 | Extensiones de pi | `RUN pi install …` en el `Dockerfile` |
 
@@ -128,4 +169,4 @@ Cambios en `.devcontainer/` van dentro de la imagen: aplicar con `./local-llm.sh
 
 ## Recursos
 
-- [llama.cpp](https://github.com/ggml-org/llama.cpp) · [pi](https://pi.dev) · [Qwen3.5 9B](https://huggingface.co/Qwen/Qwen3.5-9B) · [DeepSeek-R1-Distill-Qwen-14B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-14B) · [SearXNG](https://docs.searxng.org/) · [@oresk/pi-searxng](https://www.npmjs.com/package/@oresk/pi-searxng)
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) · [pi](https://pi.dev) · [Qwen3.5 9B](https://huggingface.co/Qwen/Qwen3.5-9B) · [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) · [FLUX.2 klein 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) · [SearXNG](https://docs.searxng.org/) · [@oresk/pi-searxng](https://www.npmjs.com/package/@oresk/pi-searxng)

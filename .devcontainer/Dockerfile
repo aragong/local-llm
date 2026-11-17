@@ -22,6 +22,30 @@ RUN cmake -B build \
     && cmake --build build -j"$(nproc)" \
     && cmake --install build --prefix /opt/llama.cpp
 
+# ---------- build stable-diffusion.cpp (CUDA, Blackwell sm_120) ----------
+# Etapa aparte: cambiar su versión no recompila llama.cpp. Node/pnpm solo para incrustar la Web UI en sd-server.
+FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS sd-builder
+ARG SD_CPP_TAG=master-1106-532d2c1
+ARG CUDA_ARCH=120
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git cmake build-essential ca-certificates curl \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g pnpm@10 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 --branch ${SD_CPP_TAG} --recurse-submodules --shallow-submodules \
+        https://github.com/leejet/stable-diffusion.cpp /src
+WORKDIR /src
+RUN cmake -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DSD_CUDA=ON \
+        -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCH} \
+        -DGGML_NATIVE=OFF \
+        -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined \
+    && cmake --build build -j"$(nproc)" --target sd-cli sd-server
+
 # ---------- runtime ----------
 FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION}
 
@@ -44,7 +68,8 @@ ENV SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml \
     SEARXNG_URL=http://127.0.0.1:8888
 
 COPY --from=builder /opt/llama.cpp /opt/llama.cpp
-ENV PATH=/opt/llama.cpp/bin:${PATH} \
+COPY --from=sd-builder /src/build/bin/sd-cli /src/build/bin/sd-server /opt/sd.cpp/bin/
+ENV PATH=/opt/llama.cpp/bin:/opt/sd.cpp/bin:${PATH} \
     LD_LIBRARY_PATH=/opt/llama.cpp/lib:${LD_LIBRARY_PATH}
 
 # ubuntu:24.04 trae usuario "ubuntu" con UID 1000; lo reemplazamos por oceanos
@@ -55,6 +80,7 @@ RUN userdel -r ubuntu \
 
 COPY .devcontainer/models.ini /etc/llama/models.ini
 COPY --chmod=755 .devcontainer/download-models.sh /usr/local/bin/download-models.sh
+COPY --chmod=755 .devcontainer/sd-server.sh /usr/local/bin/sd-server.sh
 COPY --chown=oceanos:oceanos .devcontainer/pi-models.json /home/oceanos/.pi/agent/models.json
 COPY --chown=oceanos:oceanos .devcontainer/pi-settings.json /home/oceanos/.pi/agent/settings.json
 
@@ -62,6 +88,6 @@ USER oceanos
 WORKDIR /home/oceanos
 RUN pi install npm:@oresk/pi-searxng@0.2.2
 
-# Router llama.cpp y SearXNG como procesos del contenedor (no dependen de sesiones exec de VS Code).
+# Procesos del contenedor (no dependen de sesiones exec de VS Code): SearXNG, router llama.cpp y sd-server.
 # ponytail: sin reinicio automático si alguno cae; relanzar el contenedor o a mano (ver README).
-CMD ["sh", "-c", "cd /opt/searxng/src && /opt/searxng/venv/bin/python -m searx.webapp > /tmp/searxng.log 2>&1 & llama-server --models-preset /etc/llama/models.ini --models-max 1 --host 0.0.0.0 --port 9931 > /tmp/llama-server.log 2>&1 & exec sleep infinity"]
+CMD ["sh", "-c", "cd /opt/searxng/src && /opt/searxng/venv/bin/python -m searx.webapp > /tmp/searxng.log 2>&1 & llama-server --models-preset /etc/llama/models.ini --models-max 1 --host 0.0.0.0 --port 9931 > /tmp/llama-server.log 2>&1 & sd-server.sh > /tmp/sd-server.log 2>&1 & exec sleep infinity"]
