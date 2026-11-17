@@ -33,6 +33,7 @@ VS Code (`devcontainer.json`) y `local-llm.sh` usan el **mismo** contenedor, `lo
 ```bash
 ./local-llm.sh --start     # construye imagen (caché), arranca, descarga modelos que falten
 ./local-llm.sh pi          # abre pi dentro del contenedor (lo arranca si hace falta)
+./local-llm.sh shell       # abre una terminal bash dentro del contenedor (ídem)
 ./local-llm.sh --status    # estado, origen (VS Code/terminal), puerto, modelos
 ./local-llm.sh --logs      # log de llama-server (--logs sd: el de sd-server)
 ./local-llm.sh --restart
@@ -110,13 +111,23 @@ cd /opt/searxng/src && nohup /opt/searxng/venv/bin/python -m searx.webapp > /tmp
   ```
 
   También expone la API de A1111 (`/sdapi/v1/txt2img`) y la propia (`/sdcpp/v1/...`): ver [api.md](https://github.com/leejet/stable-diffusion.cpp/blob/master/examples/server/api.md).
-- **CLI** (dentro del contenedor), sin pasar por el servidor:
+- **CLI** con `sd-cli`, sin pasar por el servidor. Abrir una terminal en el contenedor (`./local-llm.sh shell` desde el host, o la terminal integrada de VS Code) y:
 
   ```bash
-  S=/models/sd; sd-cli --diffusion-model $S/diffusion_models/flux-2-klein-4b-Q6_K.gguf \
-    --llm $S/text_encoders/Qwen3-4B-Q6_K.gguf --vae $S/vae/flux2-vae.safetensors \
-    --cfg-scale 1.0 --steps 4 -W 1024 -H 1024 -p "a lovely cat" -o cat.png
+  cd /models/sd
+  sd-cli \
+    --diffusion-model diffusion_models/flux-2-klein-4b-Q6_K.gguf \
+    --llm text_encoders/Qwen3-4B-Q6_K.gguf \
+    --vae vae/flux2-vae.safetensors \
+    -p "Un astronauta descansando en una playa tropical al atardecer, estilo cinematografico" \
+    --cfg-scale 1.0 \
+    --steps 4 \
+    -W 1024 -H 1024 \
+    --flash-attn on \
+    -o ~/test.png
   ```
+
+  ~4 s por imagen. klein está destilado para 4 pasos con `--cfg-scale 1.0`; la variante *base* usaría ~20 pasos y CFG ~4. `--flash-attn on` ahorra VRAM (sustituye al obsoleto `--diffusion-fa`; por defecto ya es `auto`). Para ver la imagen desde Windows: `docker cp local-llm-dev:/home/oceanos/test.png .` en el host, o `code ~/test.png` desde la terminal integrada de VS Code.
 
 **VRAM: convive con Qwen.** `sd-server` usa `--offload-to-cpu`: los pesos (~7 GB) quedan en RAM y solo suben a la GPU mientras genera, así que en reposo no ocupa VRAM. Medido en la RTX 5070 Ti, 1024×1024:
 

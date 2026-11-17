@@ -28,6 +28,7 @@ Uso: local-llm <opción>
   --logs     Seguir el log de llama-server (--logs sd: el de sd-server)
   --cleanup  Eliminar contenedor y, si confirmas, volumen e imagen
   pi         Abrir pi dentro del contenedor (lo arranca si hace falta)
+  shell      Abrir una terminal bash dentro del contenedor (lo arranca si hace falta)
 
 Puertos del host: API 9931 (LOCAL_LLM_PORT), imágenes 7860 (LOCAL_SD_PORT). Ej.: LOCAL_LLM_PORT=9932 local-llm --start
 EOF
@@ -107,6 +108,7 @@ case "${1:-}" in
     --logs)    logs "${2:-}" ;;
     --cleanup) cleanup ;;
     pi)        running || start; docker exec -it "$NAME" pi ;;
+    shell)     running || start; docker exec -it "$NAME" bash ;;
     --help|-h) show_help ;;
     *)         show_help; exit 1 ;;
 esac
