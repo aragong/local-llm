@@ -65,7 +65,7 @@ Modelos (cambiar con `/model`; solo uno en VRAM, el router descarga el otro):
 | Acción | Cómo |
 |---|---|
 | Buscar en internet | Pedirlo en el prompt: el modelo usa la herramienta `web_search` |
-| Nivel de razonamiento | `Shift+Tab` |
+| Nivel de razonamiento | `Shift+Tab`. Solo `off` cambia algo (envía `reasoning_effort: "none"` vía `thinkingLevelMap` en `pi-models.json`); llama.cpp trata `minimal`…`max` igual: razona sin límite |
 | Salir | `Ctrl+C` dos veces |
 
 ### Búsqueda web (SearXNG)
