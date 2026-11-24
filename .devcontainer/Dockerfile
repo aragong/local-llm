@@ -1,29 +1,8 @@
 ARG CUDA_VERSION=12.8.1
 ARG UBUNTU_VERSION=24.04
 
-# ---------- build llama.cpp (CUDA, Blackwell sm_120) ----------
-FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS builder
-ARG LLAMA_CPP_TAG=b12167
-ARG CUDA_ARCH=120
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        git cmake build-essential libcurl4-openssl-dev libssl-dev ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN git clone --depth 1 --branch ${LLAMA_CPP_TAG} https://github.com/ggml-org/llama.cpp /src
-WORKDIR /src
-RUN cmake -B build \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DGGML_CUDA=ON \
-        -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCH} \
-        -DGGML_NATIVE=OFF \
-        -DLLAMA_BUILD_TESTS=OFF \
-        -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined \
-    && cmake --build build -j"$(nproc)" \
-    && cmake --install build --prefix /opt/llama.cpp
-
 # ---------- build stable-diffusion.cpp (CUDA, Blackwell sm_120) ----------
-# Etapa aparte: cambiar su versión no recompila llama.cpp. Node/pnpm solo para incrustar la Web UI en sd-server.
+# Node/pnpm solo para incrustar la Web UI en sd-server.
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS sd-builder
 ARG SD_CPP_TAG=master-1106-532d2c1
 ARG CUDA_ARCH=120
@@ -67,10 +46,17 @@ COPY .devcontainer/searxng-settings.yml /etc/searxng/settings.yml
 ENV SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml \
     SEARXNG_URL=http://127.0.0.1:8888
 
-COPY --from=builder /opt/llama.cpp /opt/llama.cpp
+# llama.cpp: binario precompilado del fork de Unsloth (upstream b12651 + parches Inkling 2: DSpark,
+# colocación de capas en bucle...). CUDA 12.8, incluye sm_120. Libs junto a los binarios (rpath $ORIGIN).
+# Hash = digest del asset en la release de GitHub. Oficial ggml-org b12676 medido: Inkling 34 tok/s frente
+# a 43 con el fork (Qwen igual en ambos). Volver al oficial (compilar, ver git log) cuando lo iguale.
+ARG LLAMA_CPP_URL=https://github.com/unslothai/llama.cpp/releases/download/b12651-mix-c7059d6/app-b12651-mix-c7059d6-linux-x64-cuda12-newer.tar.gz
+ARG LLAMA_CPP_SHA256=4a08e6f3483ffa5e383cfa6ef88eec0765160cc2a9fefc80c0d380bb207a49b3
+RUN mkdir -p /opt/llama.cpp/bin && curl -fsSL "$LLAMA_CPP_URL" -o /tmp/llama.tgz \
+    && echo "$LLAMA_CPP_SHA256  /tmp/llama.tgz" | sha256sum -c - \
+    && tar xzf /tmp/llama.tgz -C /opt/llama.cpp/bin --no-same-owner && chmod 755 /opt/llama.cpp/bin && rm /tmp/llama.tgz
 COPY --from=sd-builder /src/build/bin/sd-cli /src/build/bin/sd-server /opt/sd.cpp/bin/
-ENV PATH=/opt/llama.cpp/bin:/opt/sd.cpp/bin:${PATH} \
-    LD_LIBRARY_PATH=/opt/llama.cpp/lib:${LD_LIBRARY_PATH}
+ENV PATH=/opt/llama.cpp/bin:/opt/sd.cpp/bin:${PATH}
 
 # ubuntu:24.04 trae usuario "ubuntu" con UID 1000; lo reemplazamos por oceanos
 RUN userdel -r ubuntu \

@@ -8,6 +8,7 @@ MODELS=(
   # LLM (llama.cpp)
   "unsloth/Qwen3.5-9B-GGUF Qwen3.5-9B-Q4_K_M.gguf"                                  # ~5.7 GB
   "unsloth/Qwen3.6-35B-A3B-MTP-GGUF Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf mtp"            # ~22.9 GB
+  "unsloth/Inkling-2-Mini-GGUF Inkling-2-Mini-UD-Q4_K_XL.gguf inkling"             # ~17.6 GB
   # Imagen: FLUX.2 [klein] 4B (stable-diffusion.cpp). sd-server busca por carpetas de categoría.
   "unsloth/FLUX.2-klein-4B-GGUF flux-2-klein-4b-Q6_K.gguf sd/diffusion_models"       # ~3.4 GB
   "unsloth/Qwen3-4B-GGUF Qwen3-4B-Q6_K.gguf sd/text_encoders"                        # ~3.3 GB

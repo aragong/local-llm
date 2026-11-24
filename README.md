@@ -1,10 +1,11 @@
 # local-llm
 
-Contenedor con [llama.cpp](https://github.com/ggml-org/llama.cpp) (compilado con CUDA para Blackwell / RTX 50xx) + [pi](https://pi.dev), búsqueda web local con [SearXNG](https://docs.searxng.org/) y generación de imágenes con [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp). Modelos locales:
+Contenedor con [llama.cpp](https://github.com/ggml-org/llama.cpp) (binario CUDA precompilado del [fork de Unsloth](https://github.com/unslothai/llama.cpp), con los parches de Inkling 2) + [pi](https://pi.dev), búsqueda web local con [SearXNG](https://docs.searxng.org/) y generación de imágenes con [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp). Modelos locales:
 
 | Modelo | Fichero | Tamaño |
 |---|---|---|
 | Qwen3.6 35B-A3B MTP UD-Q4_K_XL (texto, pi, por defecto) | `unsloth/Qwen3.6-35B-A3B-MTP-GGUF` / `Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf` (en `/models/mtp/`) | ~22.9 GB |
+| Inkling 2 Mini UD-Q4_K_XL (texto, pi) | `unsloth/Inkling-2-Mini-GGUF` / `Inkling-2-Mini-UD-Q4_K_XL.gguf` (en `/models/inkling/`) | ~17.6 GB |
 | Qwen3.5 9B Q4_K_M (texto, pi) | `unsloth/Qwen3.5-9B-GGUF` / `Qwen3.5-9B-Q4_K_M.gguf` | ~5.7 GB |
 | FLUX.2 [klein] 4B Q6_K (imágenes) | `unsloth/FLUX.2-klein-4B-GGUF` / `flux-2-klein-4b-Q6_K.gguf` | ~3.4 GB |
 | ↳ codificador de texto Qwen3 4B Q6_K | `unsloth/Qwen3-4B-GGUF` / `Qwen3-4B-Q6_K.gguf` | ~3.3 GB |
@@ -42,7 +43,7 @@ VS Code (`devcontainer.json`) y `local-llm.sh` usan el **mismo** contenedor, `lo
 ./local-llm.sh --cleanup   # elimina contenedor y, si confirmas, volumen e imagen
 ```
 
-Primera vez: compilar llama.cpp ~10-20 min + stable-diffusion.cpp ~8 min (en paralelo) + instalar SearXNG ~1 min + descargar ~36 GB. API de texto en `http://localhost:9931` y Web UI de imágenes en `http://localhost:7860` (solo localhost); otros puertos: `LOCAL_LLM_PORT=9932 LOCAL_SD_PORT=7861 ./local-llm.sh --start`.
+Primera vez: compilar stable-diffusion.cpp ~8 min + bajar llama.cpp precompilado (~0.3 GB) + instalar SearXNG ~1 min + descargar ~54 GB. API de texto en `http://localhost:9931` y Web UI de imágenes en `http://localhost:7860` (solo localhost); otros puertos: `LOCAL_LLM_PORT=9932 LOCAL_SD_PORT=7861 ./local-llm.sh --start`.
 
 El contenedor **no se para solo**, pero el modelo de texto sí libera la VRAM tras 5 min sin peticiones (`sleep-idle-seconds` en `models.ini`); la siguiente petición lo recarga (~4 s). FLUX sigue ocupando ~7 GB de RAM mientras el contenedor corre. Párelo con `--stop` cuando no lo use.
 
@@ -59,13 +60,14 @@ Modelos (cambiar con `/model`; solo uno en VRAM, el router descarga el otro):
 
 - `qwen3.6-35b-a3b` (por defecto): MoE 35B con 3B activos por token, contexto 128k (KV q8_0). Pesa 22 GB y no cabe en 16 GB de VRAM: `n-cpu-moe` deja los expertos de parte de las capas en RAM (atención y KV siguen en GPU). Usa MTP (multi-token prediction: la propia red propone 2 tokens y los verifica de una vez), que sube de ~57 a **~64 tok/s** (~67 en código) a cambio de ~1 GB de VRAM y un solo slot (`parallel = 1`). El 9B va a ~110. Piensa mucho antes de responder (cientos o miles de tokens de razonamiento). `threads = 6` es obligatorio: con el defecto (16 hilos, incluidos los E-cores del i5) cae a ~17 tok/s.
 - `qwen3.5-9b`: denso, cabe entero en VRAM, contexto 256k. Más rápido.
+- `inkling-2-mini`: MoE 26B de Thinking Machines (5.4B activos; las capas 6-17 se ejecutan 3 veces en bucle), contexto 128k. **~43 tok/s**: los expertos de 8 de las 12 capas sin bucle (0-3, 20-23) van a RAM y los del bucle se quedan en GPU (con `n-cpu-moe` normal, 30; con el llama.cpp oficial b12676, 34: por eso el fork). Su drafter DSpark no acelera aquí: no se usa. Razona poco (cientos a ~2k tokens) y no se puede apagar del todo. Al alternar con el 35B (40 GB entre los dos) la RAM no los cachea a la vez: la primera respuesta tras el cambio va a ~20 tok/s mientras relee de disco.
 
 `preserve_thinking` (Qwen3.6 conserva el razonamiento de turnos anteriores) está desactivado: medido, llena el contexto ~4× más rápido sin mejora apreciable. Para activarlo: `"compat": {"thinkingFormat": "qwen-chat-template"}` en la entrada del modelo en `pi-models.json`.
 
 | Acción | Cómo |
 |---|---|
 | Buscar en internet | Pedirlo en el prompt: el modelo usa la herramienta `web_search` |
-| Nivel de razonamiento | `Shift+Tab`. `off` no razona; `minimal`/`low`/`medium`/`high` limitan el razonamiento a 1k/2k/8k/16k tokens (`xhigh`/`max` = `high`). Ajustable con `thinkingBudgets` en `~/.pi/agent/settings.json` |
+| Nivel de razonamiento | `Shift+Tab`. Qwen: `off` no razona; `minimal`/`low`/`medium`/`high` limitan el razonamiento a 1k/2k/8k/16k tokens (`xhigh`/`max` = `high`), ajustable con `thinkingBudgets` en `~/.pi/agent/settings.json`. Inkling: el nivel va directo a su plantilla (esfuerzo 0 a 0.99); `off` lo reduce, no lo apaga |
 | Salir | `Ctrl+C` dos veces |
 
 ### Búsqueda web (SearXNG)
@@ -145,10 +147,11 @@ cd /opt/searxng/src && nohup /opt/searxng/venv/bin/python -m searx.webapp > /tmp
 | Solo FLUX | ~4-5 s | 10.7 GB |
 | Con Qwen 9B cargado (256k) | ~6-7 s | 15.8 GB de 16.3 |
 | Con Qwen3.6 35B-A3B MTP cargado (128k) | ~3 s (la primera ~10-19 s) | 15.7 GB de 16.3 |
+| Con Inkling 2 Mini cargado (128k) | ~3 s (la primera ~17 s) | 15.8 GB de 16.3 |
 
-Las dos primeras filas son de una medición anterior; la del 35B, con la versión actual de sd.cpp (que puede explicar que sea más rápida).
+Las dos primeras filas son de una medición anterior; las del 35B e Inkling, con la versión actual de sd.cpp (que puede explicar que sea más rápida).
 
-Con el 35B, pi sigue a 65-68 tok/s justo después de generar. Con el 9B se roza el límite: la primera respuesta de pi justo después de generar puede ir más lenta (medido 67 tok/s en vez de ~110) mientras Windows devuelve memoria a la GPU; se recupera en la siguiente. pi **no** genera imágenes por sí mismo (no tiene herramienta para ello): se usan la Web UI, la API o `sd-cli`.
+Con el 35B, pi sigue a 65-68 tok/s justo después de generar; Inkling, a 43. Con el 9B se roza el límite: la primera respuesta de pi justo después de generar puede ir más lenta (medido 67 tok/s en vez de ~110) mientras Windows devuelve memoria a la GPU; se recupera en la siguiente. pi **no** genera imágenes por sí mismo (no tiene herramienta para ello): se usan la Web UI, la API o `sd-cli`.
 
 **Comprobar / relanzar** (dentro del contenedor):
 
@@ -177,7 +180,7 @@ curl localhost:9931/v1/chat/completions -H 'Content-Type: application/json' \
 
 | Qué | Dónde |
 |---|---|
-| Versión llama.cpp / stable-diffusion.cpp / arquitectura CUDA | `ARG LLAMA_CPP_TAG`, `SD_CPP_TAG`, `CUDA_ARCH` en `.devcontainer/Dockerfile` |
+| Versión llama.cpp / stable-diffusion.cpp / arquitectura CUDA | `ARG LLAMA_CPP_URL` + `LLAMA_CPP_SHA256`, `SD_CPP_TAG`, `CUDA_ARCH` en `.devcontainer/Dockerfile` |
 | Contexto, capas GPU, KV cache, muestreo | `.devcontainer/models.ini` |
 | Modelos de pi | `.devcontainer/pi-models.json` → `~/.pi/agent/models.json` |
 | Modelo inicial de pi | `.devcontainer/pi-settings.json` → `~/.pi/agent/settings.json` |
@@ -193,4 +196,4 @@ Cambios en `.devcontainer/` van dentro de la imagen: aplicar con `./local-llm.sh
 
 ## Recursos
 
-- [llama.cpp](https://github.com/ggml-org/llama.cpp) · [pi](https://pi.dev) · [Qwen3.6 35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) · [Qwen3.5 9B](https://huggingface.co/Qwen/Qwen3.5-9B) · [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) · [FLUX.2 klein 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) · [SearXNG](https://docs.searxng.org/) · [@oresk/pi-searxng](https://www.npmjs.com/package/@oresk/pi-searxng)
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) · [pi](https://pi.dev) · [Qwen3.6 35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) · [Qwen3.5 9B](https://huggingface.co/Qwen/Qwen3.5-9B) · [Inkling 2 Mini](https://huggingface.co/thinkingmachines/Inkling-2-Mini) · [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) · [FLUX.2 klein 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) · [SearXNG](https://docs.searxng.org/) · [@oresk/pi-searxng](https://www.npmjs.com/package/@oresk/pi-searxng)
