@@ -4,7 +4,7 @@ Contenedor con [llama.cpp](https://github.com/ggml-org/llama.cpp) (compilado con
 
 | Modelo | Fichero | Tamaño |
 |---|---|---|
-| Qwen3.5 35B-A3B Q4_K_M (texto, pi, por defecto) | `unsloth/Qwen3.5-35B-A3B-GGUF` / `Qwen3.5-35B-A3B-Q4_K_M.gguf` | ~22.0 GB |
+| Qwen3.6 35B-A3B MTP UD-Q4_K_XL (texto, pi, por defecto) | `unsloth/Qwen3.6-35B-A3B-MTP-GGUF` / `Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf` (en `/models/mtp/`) | ~22.9 GB |
 | Qwen3.5 9B Q4_K_M (texto, pi) | `unsloth/Qwen3.5-9B-GGUF` / `Qwen3.5-9B-Q4_K_M.gguf` | ~5.7 GB |
 | FLUX.2 [klein] 4B Q6_K (imágenes) | `unsloth/FLUX.2-klein-4B-GGUF` / `flux-2-klein-4b-Q6_K.gguf` | ~3.4 GB |
 | ↳ codificador de texto Qwen3 4B Q6_K | `unsloth/Qwen3-4B-GGUF` / `Qwen3-4B-Q6_K.gguf` | ~3.3 GB |
@@ -42,7 +42,7 @@ VS Code (`devcontainer.json`) y `local-llm.sh` usan el **mismo** contenedor, `lo
 ./local-llm.sh --cleanup   # elimina contenedor y, si confirmas, volumen e imagen
 ```
 
-Primera vez: compilar llama.cpp ~10-20 min + stable-diffusion.cpp ~8 min (en paralelo) + instalar SearXNG ~1 min + descargar ~35 GB. API de texto en `http://localhost:9931` y Web UI de imágenes en `http://localhost:7860` (solo localhost); otros puertos: `LOCAL_LLM_PORT=9932 LOCAL_SD_PORT=7861 ./local-llm.sh --start`.
+Primera vez: compilar llama.cpp ~10-20 min + stable-diffusion.cpp ~8 min (en paralelo) + instalar SearXNG ~1 min + descargar ~36 GB. API de texto en `http://localhost:9931` y Web UI de imágenes en `http://localhost:7860` (solo localhost); otros puertos: `LOCAL_LLM_PORT=9932 LOCAL_SD_PORT=7861 ./local-llm.sh --start`.
 
 El contenedor **no se para solo**, pero el modelo de texto sí libera la VRAM tras 5 min sin peticiones (`sleep-idle-seconds` en `models.ini`); la siguiente petición lo recarga (~4 s). FLUX sigue ocupando ~7 GB de RAM mientras el contenedor corre. Párelo con `--stop` cuando no lo use.
 
@@ -57,8 +57,10 @@ En la terminal integrada (`` Ctrl+` ``): `pi`.
 
 Modelos (cambiar con `/model`; solo uno en VRAM, el router descarga el otro):
 
-- `qwen3.5-35b-a3b` (por defecto): MoE 35B con 3B activos por token, contexto 128k (KV q8_0). Pesa 22 GB y no cabe en 16 GB de VRAM: `n-cpu-moe` deja los expertos de parte de las capas en RAM (atención y KV siguen en GPU). Medido: ~58 tok/s (el 9B, ~110). `threads = 6` es obligatorio: con el defecto (16 hilos, incluidos los E-cores del i5) cae a ~17 tok/s.
+- `qwen3.6-35b-a3b` (por defecto): MoE 35B con 3B activos por token, contexto 128k (KV q8_0). Pesa 22 GB y no cabe en 16 GB de VRAM: `n-cpu-moe` deja los expertos de parte de las capas en RAM (atención y KV siguen en GPU). Usa MTP (multi-token prediction: la propia red propone 2 tokens y los verifica de una vez), que sube de ~57 a **~64 tok/s** (~67 en código) a cambio de ~1 GB de VRAM y un solo slot (`parallel = 1`). El 9B va a ~110. Piensa mucho antes de responder (cientos o miles de tokens de razonamiento). `threads = 6` es obligatorio: con el defecto (16 hilos, incluidos los E-cores del i5) cae a ~17 tok/s.
 - `qwen3.5-9b`: denso, cabe entero en VRAM, contexto 256k. Más rápido.
+
+`preserve_thinking` (Qwen3.6 conserva el razonamiento de turnos anteriores) está desactivado: medido, llena el contexto ~4× más rápido sin mejora apreciable. Para activarlo: `"compat": {"thinkingFormat": "qwen-chat-template"}` en la entrada del modelo en `pi-models.json`.
 
 | Acción | Cómo |
 |---|---|
@@ -142,11 +144,11 @@ cd /opt/searxng/src && nohup /opt/searxng/venv/bin/python -m searx.webapp > /tmp
 |---|---|---|
 | Solo FLUX | ~4-5 s | 10.7 GB |
 | Con Qwen 9B cargado (256k) | ~6-7 s | 15.8 GB de 16.3 |
-| Con Qwen 35B-A3B cargado (128k) | ~3 s (la primera ~12 s) | 15.6 GB de 16.3 |
+| Con Qwen3.6 35B-A3B MTP cargado (128k) | ~3 s (la primera ~10-19 s) | 15.7 GB de 16.3 |
 
 Las dos primeras filas son de una medición anterior; la del 35B, con la versión actual de sd.cpp (que puede explicar que sea más rápida).
 
-Con el 35B, pi sigue a 55-57 tok/s justo después de generar. Con el 9B se roza el límite: la primera respuesta de pi justo después de generar puede ir más lenta (medido 67 tok/s en vez de ~110) mientras Windows devuelve memoria a la GPU; se recupera en la siguiente. pi **no** genera imágenes por sí mismo (no tiene herramienta para ello): se usan la Web UI, la API o `sd-cli`.
+Con el 35B, pi sigue a 65-68 tok/s justo después de generar. Con el 9B se roza el límite: la primera respuesta de pi justo después de generar puede ir más lenta (medido 67 tok/s en vez de ~110) mientras Windows devuelve memoria a la GPU; se recupera en la siguiente. pi **no** genera imágenes por sí mismo (no tiene herramienta para ello): se usan la Web UI, la API o `sd-cli`.
 
 **Comprobar / relanzar** (dentro del contenedor):
 
@@ -191,4 +193,4 @@ Cambios en `.devcontainer/` van dentro de la imagen: aplicar con `./local-llm.sh
 
 ## Recursos
 
-- [llama.cpp](https://github.com/ggml-org/llama.cpp) · [pi](https://pi.dev) · [Qwen3.5 35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B) · [Qwen3.5 9B](https://huggingface.co/Qwen/Qwen3.5-9B) · [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) · [FLUX.2 klein 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) · [SearXNG](https://docs.searxng.org/) · [@oresk/pi-searxng](https://www.npmjs.com/package/@oresk/pi-searxng)
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) · [pi](https://pi.dev) · [Qwen3.6 35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) · [Qwen3.5 9B](https://huggingface.co/Qwen/Qwen3.5-9B) · [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) · [FLUX.2 klein 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) · [SearXNG](https://docs.searxng.org/) · [@oresk/pi-searxng](https://www.npmjs.com/package/@oresk/pi-searxng)

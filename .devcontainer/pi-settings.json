@@ -1,4 +1,4 @@
 {
   "defaultProvider": "llama-cpp",
-  "defaultModel": "qwen3.5-35b-a3b"
+  "defaultModel": "qwen3.6-35b-a3b"
 }
